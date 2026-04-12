@@ -1,65 +1,151 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { Creative, Format, StyleMode } from "@/lib/schema";
+import StyleModeToggle from "@/components/StyleModeToggle";
+import FormatPicker from "@/components/FormatPicker";
+import IdeaInput from "@/components/IdeaInput";
+import CreativePreview from "@/components/CreativePreview";
+import SlideEditor from "@/components/SlideEditor";
 
 export default function Home() {
+  const [styleMode, setStyleMode] = useState<StyleMode>("cuemath");
+  const [customStyle, setCustomStyle] = useState("");
+  const [format, setFormat] = useState<Format>("carousel");
+  const [idea, setIdea] = useState("");
+  const [creative, setCreative] = useState<Creative | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    if (!idea.trim()) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idea, format, styleMode, customStyle }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+
+      setCreative(data);
+    } catch (e) {
+      setError("Failed to connect. Check your API key in .env.local");
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSlidesUpdate = (slides: Creative["slides"]) => {
+    if (!creative) return;
+    setCreative({ ...creative, slides });
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Nav */}
+      <nav className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-[#1A1A2E]" style={{ fontFamily: "Poppins, sans-serif" }}>
+              Social Media Studio
+            </h1>
+            <p className="text-xs text-[#FF6B35] font-medium">for Cuemath</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </nav>
+
+      {/* Main */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          {/* Left panel — controls */}
+          <div className="flex flex-col gap-6">
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 flex flex-col gap-6">
+
+              {/* Style mode */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Style
+                </label>
+                <StyleModeToggle
+                  styleMode={styleMode}
+                  customStyle={customStyle}
+                  onModeChange={setStyleMode}
+                  onCustomStyleChange={setCustomStyle}
+                />
+              </div>
+
+              {/* Format */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Format
+                </label>
+                <FormatPicker format={format} onFormatChange={setFormat} />
+              </div>
+
+              {/* Idea input */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Your Idea
+                </label>
+                <IdeaInput
+                  idea={idea}
+                  isLoading={isLoading}
+                  onIdeaChange={setIdea}
+                  onGenerate={handleGenerate}
+                />
+              </div>
+
+              {/* Error */}
+              {error && (
+                <p className="text-sm text-red-500 bg-red-50 px-4 py-3 rounded-lg">
+                  {error}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Right panel — preview + editor */}
+          <div className="flex flex-col gap-6">
+
+            {/* Preview */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4 block">
+                Preview
+              </label>
+              <CreativePreview
+                creative={creative}
+                format={format}
+                styleMode={styleMode}
+                customStyle={customStyle}
+              />
+            </div>
+
+            {/* Slide editor — only shows after generation */}
+            {creative && (
+              <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <SlideEditor
+                  slides={creative.slides}
+                  idea={idea}
+                  styleMode={styleMode}
+                  customStyle={customStyle}
+                  onUpdate={handleSlidesUpdate}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
