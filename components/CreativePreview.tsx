@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Creative, Format, StyleMode } from "@/lib/schema";
 
 interface Props {
@@ -10,22 +10,6 @@ interface Props {
   customStyle: string;
 }
 
-function getBackgroundUrl(heading: string, styleMode: StyleMode, customStyle: string) {
-  const keywords = heading
-    .replace(/[^a-zA-Z\s]/g, "")
-    .split(" ")
-    .filter((w) => w.length > 3)
-    .slice(0, 3)
-    .join(",");
-
-  const baseKeywords =
-    styleMode === "cuemath"
-      ? `${keywords},education,children,learning`
-      : `${keywords},${customStyle || "modern"}`;
-
-  return `https://source.unsplash.com/1080x1080/?${encodeURIComponent(baseKeywords)}`;
-}
-
 function SlideCard({
   heading,
   body,
@@ -33,6 +17,7 @@ function SlideCard({
   styleMode,
   customStyle,
   format,
+  slideIndex,
 }: {
   heading: string;
   body: string;
@@ -40,11 +25,31 @@ function SlideCard({
   styleMode: StyleMode;
   customStyle: string;
   format: Format;
+  slideIndex: number;
 }) {
-  const bgUrl = getBackgroundUrl(heading, styleMode, customStyle);
-  const [bgLoaded, setBgLoaded] = useState(false);
-
+  const [bgUrl, setBgUrl] = useState<string | null>(null);
   const isStory = format === "story";
+
+  useEffect(() => {
+    const keywords = heading
+      .replace(/[^a-zA-Z\s]/g, "")
+      .split(" ")
+      .filter((w) => w.length > 3)
+      .slice(0, 3)
+      .join(" ");
+
+    const query =
+      styleMode === "cuemath"
+        ? `${keywords} education children study`
+        : `${keywords} ${customStyle || "modern"}`;
+
+    fetch(`/api/background?query=${encodeURIComponent(query)}&offset=${slideIndex}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.url) setBgUrl(data.url);
+      })
+      .catch(() => {});
+  }, [heading, styleMode, customStyle, slideIndex]);
 
   return (
     <div
@@ -56,14 +61,7 @@ function SlideCard({
         backgroundColor: "#1A1A2E",
       }}
     >
-      <img
-        src={bgUrl}
-        alt=""
-        crossOrigin="anonymous"
-        onLoad={() => setBgLoaded(true)}
-        style={{ display: "none" }}
-      />
-      {bgLoaded ? (
+      {bgUrl ? (
         <div
           className="absolute inset-0"
           style={{
@@ -75,10 +73,15 @@ function SlideCard({
       ) : (
         <div
           className="absolute inset-0"
-          style={{ background: "linear-gradient(135deg, #1A1A2E 0%, #2d1f3d 100%)" }}
+          style={{
+            background: "linear-gradient(135deg, #1A1A2E 0%, #2d1f3d 100%)",
+          }}
         />
       )}
-      <div className="absolute inset-0" style={{ backgroundColor: "rgba(0,0,0,0.52)" }} />
+      <div
+        className="absolute inset-0"
+        style={{ backgroundColor: "rgba(0,0,0,0.52)" }}
+      />
       <div className="relative z-10 p-5 flex flex-col gap-2">
         <p
           style={{
@@ -146,18 +149,7 @@ export default function CreativePreview({
   ) => {
     const html2canvas = (await import("html2canvas")).default;
 
-    const images = el.querySelectorAll("img");
-    await Promise.all(
-      Array.from(images).map(
-        (img) =>
-          new Promise<void>((resolve) => {
-            if (img.complete) return resolve();
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          })
-      )
-    );
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 500));
 
     const scale = w / el.offsetWidth;
     const canvas = await html2canvas(el, {
@@ -252,6 +244,7 @@ export default function CreativePreview({
                 format={format}
                 styleMode={styleMode}
                 customStyle={customStyle}
+                slideIndex={i}
               />
             </div>
           ))}
@@ -264,6 +257,7 @@ export default function CreativePreview({
               format={format}
               styleMode={styleMode}
               customStyle={customStyle}
+              slideIndex={0}
             />
           </div>
         </div>
