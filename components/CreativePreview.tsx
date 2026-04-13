@@ -10,46 +10,46 @@ interface Props {
   customStyle: string;
 }
 
+const STOP_WORDS = new Set([
+  "the","and","for","are","but","not","you","all","can","was","one","our",
+  "out","get","has","how","its","now","say","too","use","your","with","that",
+  "this","they","from","have","what","when","will","does","here","just","know",
+  "make","most","than","them","then","time","very","well","been","also","into",
+  "more","heres","why","kids","child","their","about","some","many","every",
+  "need","find","give","keep","help","good","great","real","even","much","only",
+  "each","here","just","also","back","come","over","such","take","than","them",
+  "well","were","what","when","with","your","dont","isnt","cant","wont","didnt",
+]);
+
+function buildQuery(heading: string, styleMode: StyleMode, customStyle: string): string {
+  const keywords = heading
+    .replace(/[^a-zA-Z\s]/g, "")
+    .toLowerCase()
+    .split(" ")
+    .filter((w) => w.length > 3 && !STOP_WORDS.has(w))
+    .slice(0, 3)
+    .join(" ");
+
+  if (styleMode === "cuemath") {
+    return keywords ? `${keywords} children education` : "children education learning";
+  }
+  return keywords ? `${keywords} ${customStyle || "modern"}` : customStyle || "modern";
+}
+
 function SlideCard({
   heading,
   body,
   cta,
-  styleMode,
-  customStyle,
   format,
-  slideIndex,
+  bgUrl,
 }: {
   heading: string;
   body: string;
   cta: string | null;
-  styleMode: StyleMode;
-  customStyle: string;
   format: Format;
-  slideIndex: number;
+  bgUrl: string | null;
 }) {
-  const [bgUrl, setBgUrl] = useState<string | null>(null);
   const isStory = format === "story";
-
-  useEffect(() => {
-    const keywords = heading
-      .replace(/[^a-zA-Z\s]/g, "")
-      .split(" ")
-      .filter((w) => w.length > 3)
-      .slice(0, 3)
-      .join(" ");
-
-    const query =
-      styleMode === "cuemath"
-        ? `${keywords} education children study`
-        : `${keywords} ${customStyle || "modern"}`;
-
-    fetch(`/api/background?query=${encodeURIComponent(query)}&offset=${slideIndex}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.url) setBgUrl(data.url);
-      })
-      .catch(() => {});
-  }, [heading, styleMode, customStyle, slideIndex]);
 
   return (
     <div
@@ -73,15 +73,10 @@ function SlideCard({
       ) : (
         <div
           className="absolute inset-0"
-          style={{
-            background: "linear-gradient(135deg, #1A1A2E 0%, #2d1f3d 100%)",
-          }}
+          style={{ background: "linear-gradient(135deg, #1A1A2E 0%, #2d1f3d 100%)" }}
         />
       )}
-      <div
-        className="absolute inset-0"
-        style={{ backgroundColor: "rgba(0,0,0,0.52)" }}
-      />
+      <div className="absolute inset-0" style={{ backgroundColor: "rgba(0,0,0,0.52)" }} />
       <div className="relative z-10 p-5 flex flex-col gap-2">
         <p
           style={{
@@ -134,6 +129,45 @@ export default function CreativePreview({
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
   const singleRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [bgUrls, setBgUrls] = useState<(string | null)[]>([]);
+
+  // Fetch images sequentially when creative changes
+  useEffect(() => {
+    if (!creative) return;
+
+    setBgUrls([]);
+
+    const fetchSequentially = async () => {
+      const usedIds: number[] = [];
+      const urls: (string | null)[] = [];
+
+      for (const slide of creative.slides) {
+        const query = buildQuery(slide.heading, styleMode, customStyle);
+        const usedParam = usedIds.join(",");
+
+        try {
+          const res = await fetch(
+            `/api/background?query=${encodeURIComponent(query)}&usedIds=${usedParam}`
+          );
+          const data = await res.json();
+
+          if (data.url) {
+            urls.push(data.url);
+            if (data.id) usedIds.push(data.id);
+          } else {
+            urls.push(null);
+          }
+        } catch {
+          urls.push(null);
+        }
+
+        // Update UI as each image loads
+        setBgUrls([...urls]);
+      }
+    };
+
+    fetchSequentially();
+  }, [creative, styleMode, customStyle]);
 
   const exportSize = {
     post: { width: 1080, height: 1080 },
@@ -148,7 +182,6 @@ export default function CreativePreview({
     h: number
   ) => {
     const html2canvas = (await import("html2canvas")).default;
-
     await new Promise((r) => setTimeout(r, 500));
 
     const scale = w / el.offsetWidth;
@@ -217,11 +250,7 @@ export default function CreativePreview({
     return (
       <div
         className="flex items-center justify-center h-64 rounded-xl"
-        style={{
-          border: "2px dashed #e5e7eb",
-          color: "#9ca3af",
-          fontSize: "14px",
-        }}
+        style={{ border: "2px dashed #e5e7eb", color: "#9ca3af", fontSize: "14px" }}
       >
         Your creative will appear here
       </div>
@@ -235,16 +264,12 @@ export default function CreativePreview({
           {creative.slides.map((slide, i) => (
             <div
               key={slide.index}
-              ref={(el) => {
-                slideRefs.current[i] = el;
-              }}
+              ref={(el) => { slideRefs.current[i] = el; }}
             >
               <SlideCard
                 {...slide}
                 format={format}
-                styleMode={styleMode}
-                customStyle={customStyle}
-                slideIndex={i}
+                bgUrl={bgUrls[i] ?? null}
               />
             </div>
           ))}
@@ -255,9 +280,7 @@ export default function CreativePreview({
             <SlideCard
               {...creative.slides[0]}
               format={format}
-              styleMode={styleMode}
-              customStyle={customStyle}
-              slideIndex={0}
+              bgUrl={bgUrls[0] ?? null}
             />
           </div>
         </div>
